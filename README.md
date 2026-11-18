@@ -31,3 +31,18 @@ Tier 2
 [ ] Dashboard with at least 2 pages/tabs
 [ ] Custom HTML/CSS styling in a template node
 
+
+## Pin plan
+| Component | Arduino pin |
+|---|---|
+| Distance sensor – Trig | D7 |
+| Distance sensor – Echo | D8 |
+| DHT11 – Signal | D2 |
+| LDR (light sensor) | A0 |
+| Push button | D4 |
+| RGB LED – Red / Green / Blue | D9 / D10 / D11 |
+| Buzzer | D12 |
+| 5V and GND | Breadboard power rails (+ / −) |
+
+
+
