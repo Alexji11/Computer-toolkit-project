@@ -46,3 +46,8 @@ Tier 2
 
 
 
+## Wiring diagram
+![Wiring diagram](docs/wiring_diagram.png)
+
+Note: Tinkercad has no DHT11, so a TMP36 is used as a placeholder.
+The real DHT11 is connected as: S → D2, VCC → 5V, GND → GND.
