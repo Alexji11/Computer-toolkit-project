@@ -12,6 +12,16 @@
 //   example: T:23.5;H:58.0;L:450;D:35
 // Button event (sent when the button is pressed):
 //   BTN:PRESSED
+//
+// Commands (Node-RED -> Arduino), one per line, format KEY:VALUE
+//   MUTE:1 / MUTE:0     mute or unmute the buzzer
+//   TMIN:<°C>           minimum comfortable temperature
+//   TMAX:<°C>           maximum comfortable temperature
+//   HMIN:<%>            minimum comfortable humidity
+//   HMAX:<%>            maximum comfortable humidity
+//   LMIN:<0-1023>       minimum light level (raw)
+//   BEEP:<ms>           beep for <ms> milliseconds (e.g. end of Pomodoro)
+// Answers: ACK:<command> if understood, ERR:UNKNOWN if not
 // =====================================================================
 
 #include <DHT.h>
@@ -32,7 +42,7 @@ float tempMin  = 20.0;   // °C
 float tempMax  = 24.0;   // °C
 float humMin   = 40.0;   // %
 float humMax   = 60.0;   // %
-int   lightMin = 600;    // raw value 0-1023, below this it is too dark
+int   lightMin = 600;    // raw value 0-1023, where 0 = dark, 1023 = bright
 
 // ---------- Timing: millis() instead of delay() ----------
 const unsigned long SEND_INTERVAL = 1000;  // send data every 1 second
@@ -54,6 +64,8 @@ int   distanceCm  = 0;
 // ---------- Other state ----------
 bool lastButtonState  = HIGH;  // HIGH = not pressed (INPUT_PULLUP)
 int  lastComfortLevel = 0;     // 0 = good, 1 = medium, 2 = bad
+bool muted            = false; // true = buzzer is silenced
+String inputBuffer    = "";    // characters of the command being received
 
 
 // =====================================================================
@@ -95,8 +107,9 @@ void loop() {
     sendData();
   }
 
-  // As often as possible: check the button and switch the buzzer off in time
+  // As often as possible: check the button, read commands, switch the buzzer off in time
   checkButton();
+  readCommands();
   updateBuzzer(now);
 }
 
@@ -200,6 +213,7 @@ void checkButton() {
 
 // Switches the buzzer on; updateBuzzer() switches it off after "duration" ms
 void beep(unsigned long duration) {
+  if (muted) return;             // do nothing when the buzzer is muted
   digitalWrite(BUZZER_PIN, HIGH);
   buzzerOffTime = millis() + duration;
 }
@@ -227,4 +241,53 @@ void sendData() {
   Serial.print(lightRaw);
   Serial.print(";D:");
   Serial.println(distanceCm);
+}
+
+
+// =====================================================================
+// Receiving commands (Node-RED -> Arduino)
+// =====================================================================
+
+// Collects the incoming characters until a full line has arrived.
+// Does not block: it only reads what is already waiting.
+void readCommands() {
+  while (Serial.available() > 0) {
+    char c = Serial.read();
+
+    if (c == '\n') {                 // end of the line: the command is complete
+      handleCommand(inputBuffer);
+      inputBuffer = "";
+    } else if (c != '\r') {
+      inputBuffer += c;
+      if (inputBuffer.length() > 30) inputBuffer = "";  // too long: throw it away
+    }
+  }
+}
+
+// Executes one command, e.g. "TMAX:26" -> key "TMAX", value 26
+void handleCommand(String cmd) {
+  cmd.trim();
+  int sep = cmd.indexOf(':');
+  if (sep == -1) {
+    Serial.println("ERR:UNKNOWN");
+    return;
+  }
+
+  String key  = cmd.substring(0, sep);
+  float value = cmd.substring(sep + 1).toFloat();
+
+  if      (key == "MUTE") muted    = (value == 1);
+  else if (key == "TMIN") tempMin  = value;
+  else if (key == "TMAX") tempMax  = value;
+  else if (key == "HMIN") humMin   = value;
+  else if (key == "HMAX") humMax   = value;
+  else if (key == "LMIN") lightMin = value;
+  else if (key == "BEEP") beep(value);
+  else {
+    Serial.println("ERR:UNKNOWN");
+    return;
+  }
+
+  Serial.print("ACK:");              // confirm the command was understood
+  Serial.println(cmd);
 }
